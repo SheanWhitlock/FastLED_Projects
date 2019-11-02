@@ -22,14 +22,29 @@ char auth[] = "wa_JBJQH3z4PubKpj8AqXQKnGT-LvcLM";
 CRGB rawleds[NUM_LEDS];
 CRGBSet leds(rawleds, NUM_LEDS);
 CRGBSet staffLeds(leds(0, 4));
-CRGBSet moonLeds(leds(5, 20));
+CRGBSet moonLeds(leds(5, 10),leds(11,20));
 CRGBSet sunLeds(leds(21, 32));
 struct CRGB * ledarray[] = {staffLeds, moonLeds, sunLeds};
 
+  
+int stripearray[8][6] = 
+{
+{5,6,-1,-1,-1,-1},
+{7,22,23,24,-1,-1},
+{8,20,21,25,26,32},
+{9,30,31,27,28,-1},
+{10,19,29,-1,-1,-1},
+{11,17,18,-1,-1,-1},
+{12,16,-1,-1,-1,-1},
+{13,14,15,-1,-1,-1}
+};
+
+int circlearray[8][6];
 
 //Global Variable Initialzation
 uint8_t gCurrentPatternNumber = 0; // Index number of which pattern is current
 uint8_t gCyclePatternNumber = 0; // Index number for cycling
+uint8_t brightnessSetting = 0; // Brightness setting from Blynk
 uint8_t gHue = 0; // rotating "base color" used by many of the patterns
 uint8_t gHueFast = 0;
 int hueUpdate = 25; // hue update speed
@@ -41,6 +56,8 @@ uint8_t bS = 0;
 uint8_t rM = 0; // Moon default RGB setup
 uint8_t gM = 80;
 uint8_t bM = 200;
+int breathing = 0; // Breathing switch
+int glitter = 0; // Glitter switch
 
 extern const TProgmemRGBGradientPalettePtr gGradientPalettes[];
 extern const uint8_t gGradientPaletteCount;
@@ -71,6 +88,7 @@ BLYNK_WRITE(V1) // Brightness Slider
   uint8_t pinValue = param.asInt();
   if (onOff == 1) {
     FastLED.setBrightness(pinValue);
+    brightnessSetting = pinValue;
   }
 }
 
@@ -126,13 +144,19 @@ void setup()
 
 
 typedef void (*SimplePatternList[])();
-SimplePatternList gPatterns = {  paletteCycle, solid, twinkle, rainbow, rainbowTwinkle, colorwave, speckles };
+SimplePatternList gPatterns = {  paletteCycle, solid, twinkle, rainbow, rainbowTwinkle, colorwave, speckles, stripesUp, stripesDown, circleUp,circleDown };
 
 void loop()
 {
   Blynk.run();
   if ( cycleOnOff == 1) {
     gPatterns[gCyclePatternNumber]();
+    if ( breathing == 1) {
+      addBreathing();
+    }
+    if ( glitter == 1) {
+      addGlitter(40);
+    }
   }
   else {
     gPatterns[gCurrentPatternNumber]();
@@ -145,13 +169,16 @@ void loop()
     nblendPaletteTowardPalette( gCurrentPalette, gTargetPalette, 12); // for colorwave
   }
   EVERY_N_SECONDS( 30 ) { // Color palette timer
-    //gCurrentPaletteNumber = random8( gGradientPaletteCount);
-    gCurrentPaletteNumber = addmod8( gCurrentPaletteNumber, 1, gGradientPaletteCount);
+    gCurrentPaletteNumber = random8( gGradientPaletteCount);
+    //gCurrentPaletteNumber = addmod8( gCurrentPaletteNumber, 1, gGradientPaletteCount);
     gTargetPalette = gGradientPalettes[ gCurrentPaletteNumber ];
-    Serial.print(gCurrentPaletteNumber);
+    //Serial.print(gCurrentPaletteNumber);
   }
   EVERY_N_SECONDS( 90 ) { // mode cycle timer
     nextPattern();
+    FastLED.setBrightness (brightnessSetting);
+    breathing = random8(2); // breathing switch random on off
+    glitter = random8(2); // glitter switch random on off
   }
 
   FastLED.show();
@@ -167,13 +194,6 @@ void nextPattern()
 }
 
 //Lighting Modes
-/*void defaultSetting()
-{
-  static uint8_t startindex = 0;
-  startindex--;
-  fill_palette( leds, NUM_LEDS, startindex, (256 / NUM_LEDS) + 1, gCurrentPalette, 255, LINEARBLEND);
-}
-*/
 void paletteCycle()
 {
   static uint8_t startindex = 0;
@@ -181,6 +201,45 @@ void paletteCycle()
   fill_palette( staffLeds, 5, startindex, (256 / 5) + 1, gCurrentPalette, 255, LINEARBLEND);
   fill_palette( moonLeds, 16, startindex, (256 / 16) + 1, gCurrentPalette, 255, LINEARBLEND);
   fill_palette( sunLeds, 12, startindex, (256 / 12) + 1, gCurrentPalette, 255, LINEARBLEND);
+}
+
+
+void stripesUp(){
+  cycleUp(stripearray);
+}
+void stripesDown(){
+  cycleDown(stripearray);
+}
+
+void circleUp(){
+  cycleUp(circlearray);
+}
+void circleDown(){
+  cycleDown(circlearray);
+}
+
+void cycleUp(int aray[8][6]){
+
+  for (int i = 0; i < 8; i++){
+    for(int j = 0; j < 6; j++){
+      if(aray[i][j] != -1){
+        leds[ aray[i][j] ] = ColorFromPalette(gCurrentPalette, addmod8(gHueFast,i*32,255));
+      }
+    }
+  }
+  fill_palette( staffLeds, 5, -1, (256 / 5) + 1, gCurrentPalette, 255, LINEARBLEND);
+}
+
+void cycleDown(int aray[8][6]){
+
+  for (int i = 7; i > -1; i--){
+    for(int j = 0; j < 6; j++){
+      if(aray[i][j] != -1){
+        leds[ aray[i][j] ] = ColorFromPalette(gCurrentPalette, addmod8(gHueFast,-i*32,255));
+      }
+    }
+  }
+  fill_palette( staffLeds, 5, -1, (256 / 5) + 1, gCurrentPalette, 255, LINEARBLEND);
 }
 
 void rainbow()
@@ -205,7 +264,7 @@ void solid()
     leds[i].g = gS;
     leds[i].b = bS;
   }
-  //addBreathing()
+  addBreathing();
 }
 
 void twinkle()
@@ -218,23 +277,32 @@ void addGlitter( fract8 chanceOfGlitter)
 {
   if ( random8() < chanceOfGlitter) {
     leds[ random16(NUM_LEDS) ] += CRGB::White;
+    fadeToBlackBy( leds, NUM_LEDS, 10);
   }
 }
 
+/*
+void addGlitter( fract8 chanceOfGlitter)
+{
+  uint8_t ramp = beatsin8( 20, 0, brightnessSetting );
+  if ( random8() < chanceOfGlitter) {
+    leds[ random16(NUM_LEDS) ] = CHSV(0, 255, ramp);
+  }
+}
+*/
 void addBreathing()
 {
   //sin wave set.brightness
+  uint8_t breathingWave = 0;
+  uint8_t breathingSpeed = map(hueUpdate, 40, 1, 10, 50);
+  breathingWave = beatsin8( breathingSpeed, brightnessSetting * .2, brightnessSetting );
+  FastLED.setBrightness (breathingWave);
 }
 
 void rainbowTwinkle()
 {
   rainbow();
   addGlitter(80);
-}
-
-void strobe()
-{
-  fill_solid( leds, NUM_LEDS, gHue);
 }
 
 void speckles()
